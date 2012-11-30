@@ -1,0 +1,172 @@
+<?php
+
+/**
+ * @file
+ * Provides a skill testing questions for forms.
+ */
+
+/**
+ * Implements hook_stq_info().
+ */
+function stq_stq_info() {
+  $info['random'] = array(
+    'title' => t('Random'),
+    'description' => t('Random Skill Testing Question'),
+    'callback' => 'stq_random',
+  );
+  $info['meaning_of_life'] = array(
+    'title' => t('Meaning of Life'),
+    'description' => t('The meaning of life skill testing questions.'),
+    'callback' => 'stq_meaning_of_life',
+  );
+  return $info;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function stq_form_alter(&$form, &$form_state, $form_id) {
+  // Apply skill testing question form to enabled forms.
+  if ( in_array($form_id, variable_get('stq_form_ids', array())) ) {
+    stq_form($form, $form_state);
+  }
+}
+
+/**
+ * Skill Testing Question Form.
+ */
+function stq_form(&$form, &$form_state) {
+  // Check if a skill testing question was already asked.
+  if ( isset($form_state['input']['stq_hash']) ) {
+    $stq = stq_decrypt($form_state['input']['stq_hash']);
+  }
+  // Get a new skill testing question.
+  else {
+    $stq = stq_get();
+  }
+
+  $form['stq_answer'] = array(
+    '#type' => 'textfield',
+    '#title' => t('@num1 @op @num2 =', array('@num1' => $stq->num1, '@num2' => $stq->num2, '@op' => $stq->op)),
+  );
+
+  // Hash the current skill testing question so we can use it later.
+  $form['stq_hash'] = array(
+    '#type' => 'hidden',
+    '#value' => stq_encrypt($stq),
+  );
+}
+
+/**
+ * Returns a skill testing question.
+ */
+function stq_get($type = NULL) {
+  if ( is_null($type) ) {
+    $type = variable_get('stq_default_type', 'random');
+  }
+
+  $stq = FALSE;
+  $stqs = module_invoke_all('stq_info');
+  if ( isset($stqs[$type]) ) {
+    $stq = call_user_func($stqs[$type]['callback']);
+  }
+  
+  return $stq;
+}
+
+/**
+ * Returns a random Skill Testing Question.
+ */
+function stq_random() {
+  $op = '+';
+
+  // Generate random numbers for skill testing.
+  $num1 = ceil(rand(1, 10));
+  $num2 = ceil(rand(1, 10));
+
+  // Determine the answer.
+  switch ( $op ) {
+    case '+':
+      $answer = $num1 + $num2;
+      break;
+    case '-':
+      $answer = $num1 - $num2;
+      break;
+    case '*':
+      $answer = $num1 * $num2;
+      break;
+    case '/':
+      $answer = $num1 / $num2;
+      break;
+  }
+
+  $stq = (object) array(
+    'op' => $op,
+    'num1' => $num1,
+    'num2' => $num2,
+    'answer' => $answer,
+  );
+
+  return $stq;
+}
+
+/**
+ * Returns a Skill Testing Question that answers everything.
+ */
+function stq_meaning_of_life() {
+  // Pick a random operations
+  $ops = array('+', '-', '*', '/');
+  $rand_op = array_rand($ops);
+  $op = $ops[$rand_op];
+
+  // Pick a random factor.
+  $factors = array(21, 14, 7, 6, 3);
+  $rand_factor = array_rand($factors);
+  $factor = $factors[$rand_factor];
+
+  switch ( $op ) {
+    case '+':
+      $num1 = rand(1, 41);
+      $num2 = 42 - $num1;
+      break;
+    case '-':
+      $num1 = rand(43, 100);
+      $num2 = $num1 - 42;
+      break;
+    case '*':
+      $num1 = $factor;
+      $num2 = 42 / $factor;
+      break;
+    case '/';
+      $num1 = 42 * $factor;
+      $num2 = $factor;
+      break;
+  }
+
+  $stq = (object) array(
+    'op' => $op,
+    'num1' => $num1,
+    'num2' => $num2,
+    'answer' => 42,
+  );
+
+  return $stq;
+}
+
+/**
+ * Returns an stq as encrypted hash.
+ */
+function stq_encrypt($stq) {
+  global $drupal_hash_salt;
+
+  return base64_encode(mcrypt_encrypt(MCRYPT_RIJNDAEL_256, md5($drupal_hash_salt), serialize($stq), MCRYPT_MODE_CBC, md5(md5($drupal_hash_salt))));
+}
+
+/**
+ * Returns a decrypted stq from hash.
+ */
+function stq_decrypt($hash) {
+  global $drupal_hash_salt;
+
+  return unserialize(rtrim(mcrypt_decrypt(MCRYPT_RIJNDAEL_256, md5($drupal_hash_salt), base64_decode($hash), MCRYPT_MODE_CBC, md5(md5($drupal_hash_salt))), "\0"));
+}
