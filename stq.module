@@ -55,6 +55,22 @@ function stq_form(&$form, &$form_state) {
     '#type' => 'hidden',
     '#value' => stq_encrypt($stq),
   );
+
+  array_unshift($form['#validate'], 'stq_form_validate');
+}
+
+/**
+ * Validate Callback: Skill Testing Question Form.
+ */
+function stq_form_validate($form, &$form_state) {
+  $stq = stq_decrypt($form_state['values']['stq_hash']);
+
+  if ( isset($stq->answer) && $form_state['values']['stq_answer'] == $stq->answer ) {
+    $form_state['values']['stq'] = TRUE;
+  }
+  else {
+    $form_state['values']['stq'] = FALSE;
+  }
 }
 
 /**
